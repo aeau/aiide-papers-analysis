@@ -321,8 +321,11 @@ class Experimenter:
                 #     print(line)
 
             table_positions = self.combine_positions(table_positions)
+            block_index = -1
+            abstract_found = False
 
             for block in text:
+                block_index += 1
                 # block is a tuple: (x0, y0, x1, y1, "text", block_no, block_type)
                 add_text = True
                 for table_numbers in range(len(table_positions['x0'])):
@@ -332,6 +335,19 @@ class Experimenter:
 
                         # Now we check if the text is within the width bounds of the table
                         if block[0] < table_positions['x1'][table_numbers]:
+
+                            # FIXME: Hack in case the abstract is a table (sometimes)... Shuold be fix to add all the abstract, but it is good for now!
+                            if 'abstract' in block[4] or 'Abstract' in block[4] or "ABSTRACT" in block[4] or "abstract." in block[4] or "Abstract." in block[4] or "ABSTRACT." in block[4]:
+                                if len(block[4]) < 20: # hack in case the block is just "abstract"
+                                    abstract_found = True
+
+                                add_text = True
+                                break
+                            elif abstract_found:
+                                abstract_found = False
+                                add_text = True
+                                break
+
                             add_text = False
                             break
 
@@ -359,6 +375,8 @@ class Experimenter:
 
     def get_sections_from_font_size(self, font_lists):
         sections = []
+        bigger_size_headers = []
+        different_sections = False
         reference_font_size = 0.0
 
         # Define the regular expression pattern
@@ -367,7 +385,7 @@ class Experimenter:
         matches = [(font_size, text) for font_size, text in font_lists if pattern.match(text)]
         # pattern.search #?
 
-        if matches:
+        if matches: # todo: Problem is here with the references.... think about what to do?
             print(matches)
             reference_font_size = matches[0][0]
 
@@ -379,6 +397,23 @@ class Experimenter:
         for font_size, text in font_lists:
             if reference_font_size - 0.2 < font_size < reference_font_size + 0.2:
                 sections.append(text)
+            elif font_size > reference_font_size + 0.2:
+                bigger_size_headers.append((font_size, text))
+
+        # This two parts of the code should only happen if the REferences header is smaller (only a few cases!)
+        for bigger_size_font, bigger_size_header in bigger_size_headers:
+            if (("Introduction" in bigger_size_header) or ("introduction" in bigger_size_header) or ("INTRODUCTION" in bigger_size_header) or
+                    ("Conclusions" in bigger_size_header) or ("conclusions" in bigger_size_header) or ("CONCLUSIONS" in bigger_size_header)):
+                different_sections = True
+                reference_font_size = bigger_size_font
+                break
+
+        if different_sections:
+            sections.clear()
+            sections.append(matches[0][1])
+            for font_size, text in font_lists:
+                if reference_font_size - 0.2 < font_size < reference_font_size + 0.2:
+                    sections.append(text)
 
         return sections
 
@@ -391,16 +426,17 @@ class Experimenter:
 
         for line in reference_text.split('\n'):
             # print(line)
-            if possible_end and (bool(pattern.match(line)) or bool(pattern_2.match(line))):
+            stripped_line = line.strip()
+            if possible_end and (bool(pattern.match(stripped_line)) or bool(pattern_2.match(stripped_line))):
                 reference_list.append(current_reference)
                 current_reference = ""
 
             possible_end = False
 
-            if line.endswith("."):
+            if stripped_line.endswith("."):
                 possible_end = True
 
-            current_reference += line + " "
+            current_reference += stripped_line + " "
 
         if current_reference != "":
             reference_list.append(current_reference)
@@ -492,10 +528,13 @@ class Experimenter:
                         self.papers[cleaned_paper_title].add_abstract("there was no abstract!")
                         current_text_data = text_data
 
-                    possible_sections = self.find_sections(current_text_data)
+                    # possible_sections = self.find_sections(current_text_data)
                     possible_sections = self.find_sections_with_names(current_text_data, section_names)
+                    #possible_sections, current_text_data = self.find_sections_with_names_data_extraction(current_text_data, section_names)
                     possible_sections.sort(key=lambda x: x[0])
                     # print(possible_sections)
+                    if possible_sections[0][0] != 0: # FIXME: Not sure about this change!
+                        possible_sections.insert(0, (0, current_text_data[0]))
                     iteration = 0
 
                     for possible_section in possible_sections:
@@ -521,6 +560,7 @@ class Experimenter:
                                 reference_list = self.extract_references(current_section_text)
 
                                 for reference in reference_list:
+                                    reference = reference.replace("-\n", "")
                                     reference = reference.replace("\n", " ")
                                     self.papers[cleaned_paper_title].add_value(reference, "reference")
 
@@ -532,6 +572,7 @@ class Experimenter:
 
                             for step in range(section_index, next_section_index):
                                 current_section_text = current_text_data[step]
+                                current_section_text = current_section_text.replace("-\n", "")
                                 current_section_text = current_section_text.replace("\n", " ")
                                 final_section_text += current_section_text
 
@@ -570,7 +611,9 @@ class Experimenter:
         df = pd.DataFrame(self.collected_papers_general.get_data(), columns=self.collected_papers_general.get_data().keys())
         df_cleaned = df.applymap(self.remove_illegal_characters)
         #df.to_excel("output.xlsx")
-        df_cleaned.to_excel(self.papers_directory + "/../aiide-dataset-smalltest-secondtry.xlsx")
+        # df_cleaned.to_excel(self.papers_directory + "/../aiide-dataset-peryeartest-third-nocontains.xlsx")
+        df_cleaned.to_excel(self.papers_directory + "/../aiide-dataset-fulltest.xlsx")
+
 
     def extract_until_newline(self, string):
         pattern = re.compile(r".*?(?=\n)")
@@ -592,9 +635,34 @@ class Experimenter:
                 if aux_text.startswith(known_section_strip):
                     matches.append((index, text))
                     break
-                # elif ## todo: I WAS HERE
+                # elif ## todo: What I am trying to do here is when the text includes the section name (but it does not start with it!...)
 
         return matches
+
+    def find_sections_with_names_data_extraction(self, text_data, known_sections):
+        matches = []
+        aux_text_data = text_data
+
+        for known_section in known_sections:
+            known_section_strip = known_section.replace("\n", " ")
+            known_section_strip = " ".join(known_section.split())
+            for index, text in enumerate(aux_text_data):
+                aux_text = text.replace("\n", " ")
+                aux_text = " ".join(text.split())
+                if aux_text.startswith(known_section_strip):
+                    matches.append((index, text))
+                    break
+                # elif ## todo: What I am trying to do here is when the text includes the section name (but it does not start with it!...)
+                elif known_section_strip in aux_text:
+                    within_index = aux_text.find(known_section_strip)
+                    del aux_text_data[index]
+                    aux_text_data.insert(index - 1, aux_text[:within_index])
+                    aux_text_data.insert(index, aux_text[within_index:])
+                    matches.append((index, aux_text[within_index:]))
+                    break
+
+        return matches, aux_text_data
+
     def find_sections(self, text_data):
 
         patterns = [r"^\b[A-Z]+ \n", r"^\b[A-Z]+\n",
@@ -630,7 +698,7 @@ class Experimenter:
         for match in matches:
             aux_text = match[1].replace("\n", "")
             aux_text = aux_text.strip()
-            if aux_text == 'abstract' or aux_text == 'Abstract' or aux_text == "ABSTRACT":
+            if aux_text == 'abstract' or aux_text == 'Abstract' or aux_text == "ABSTRACT" or aux_text == "abstract." or aux_text == "Abstract." or aux_text == "ABSTRACT.":
                 next_index = True
                 index_to_continue = match[0] + 1
                 break

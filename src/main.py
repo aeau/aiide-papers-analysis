@@ -17,8 +17,10 @@ def print_hi(name):
 if __name__ == '__main__':
     print_hi('PyCharm')
 
-# core_path = Path(__file__).parent.resolve() / "../../per-year-test/"
-core_path = Path(__file__).parent.resolve() / "../../test-around/"
+core_path = Path(__file__).parent.resolve() / "../../per-year-test/"
+#core_path = Path(__file__).parent.resolve() / "../../test-around/"
+core_path = Path(__file__).parent.resolve() / "../../specific-test/"
+core_path = Path(__file__).parent.resolve() / "../../per-year/"
 print(core_path)
 
 final_paper_directory = str(core_path)
