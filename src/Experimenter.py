@@ -28,7 +28,9 @@ from matplotlib.colors import from_levels_and_colors
 from matplotlib.collections import LineCollection
 
 from src.CollectedPapersGeneral import CollectedPapersGeneral
+from src.EncounteredPapersGeneral import EncounteredPapersGeneral
 from src.Paper import Paper
+from src.EncounteredPapers import EncounteredPapers
 from src.DatasetLLMPapers import *
 import string
 
@@ -63,6 +65,11 @@ class Experimenter:
         self.ignore_keywords_analysis = ["publication rights", "acm", "licensed under a creative commons",
                            "human factors in computing", "licensed", "license", "Licensed", "profit", "proceedings", "sigchi",
                            "commercial", "citation", "classroom"]
+
+
+        self.encountered_papers = {}
+        self.aggregated_encountered_papers = {}
+        self.encountered_papers_general = EncounteredPapersGeneral("aiide", 50)
 
     def get_csv_files(self, directory):
         filenames = listdir(directory)
@@ -233,16 +240,16 @@ class Experimenter:
 
     def extract_section_names(self, file_path):
         pdf_document = pymupdf.open(file_path)
-        print(pdf_document.get_toc())
+        # print(pdf_document.get_toc())
 
         document_toc = pdf_document.get_toc()
 
         # Extracting the second element where the first element is 1 (1 means that it is a section!)
         extracted_sections = [sublist[1] for sublist in document_toc if sublist[0] == 1]
-        print(extracted_sections)
-        print(pdf_document.chapter_count)
+        # print(extracted_sections)
+        # print(pdf_document.chapter_count)
         #print(pdf_document.extract_font(4711))
-        print(pdf_document.get_page_fonts(0, full=True))
+        # print(pdf_document.get_page_fonts(0, full=True))
         return extracted_sections
 
     def extract_font_sizes(self, file_path):
@@ -260,7 +267,7 @@ class Experimenter:
                                 break
  #                   Extract_Data.append([Font_size, (element.get_text())])
 
-        print(Extract_Data)
+        # print(Extract_Data)
         return Extract_Data
 
     def check_if_text_in_block(self, text, testing_index):
@@ -386,8 +393,11 @@ class Experimenter:
         # pattern.search #?
 
         if matches: # todo: Problem is here with the references.... think about what to do?
-            print(matches)
+            # print(matches)
             reference_font_size = matches[0][0]
+        else:
+            return None
+
 
         # for font_size, text in font_lists:
         #     if text.startswith("References") or text.startswith("references") or text.startswith("REFERENCES"):
@@ -487,6 +497,12 @@ class Experimenter:
                     # section_names = self.extract_section_names(paper_directory)
                     section_names = self.extract_font_sizes(paper_directory)
                     section_names = self.get_sections_from_font_size(section_names)
+
+                    if section_names is None: ## TODO: This will stop for now papers without References!
+                        print("Problems with: " + file + ", year: " + str(proceedings_year) + ", type: " + str(
+                            paper_type))
+                        continue
+
                     text_data = self.extract_text_from_pdf(paper_directory)
                     text_data = self.remove_random_header(text_data)
 
@@ -532,9 +548,14 @@ class Experimenter:
                     possible_sections = self.find_sections_with_names(current_text_data, section_names)
                     #possible_sections, current_text_data = self.find_sections_with_names_data_extraction(current_text_data, section_names)
                     possible_sections.sort(key=lambda x: x[0])
+
                     # print(possible_sections)
-                    if possible_sections[0][0] != 0: # FIXME: Not sure about this change!
-                        possible_sections.insert(0, (0, current_text_data[0]))
+                    if not possible_sections:
+                        print("Problems with: " + file + ", year: " + str(proceedings_year) + ", type: " + str(paper_type))
+                    else:
+                        if possible_sections[0][0] != 0: # FIXME: Not sure about this change!
+                            possible_sections.insert(0, (0, current_text_data[0]))
+
                     iteration = 0
 
                     for possible_section in possible_sections:
@@ -784,7 +805,7 @@ class Experimenter:
         for file in xlsx_files:
             print(file)
 
-            current_data = pd.read_excel(self.papers_directory + "/" + file)  # Get the pandas object
+            current_data = pd.read_excel(self.papers_directory + "/" + file, engine='openpyxl')  # Get the pandas object
             current_data = current_data.replace(np.nan, "")
             current_data = current_data.replace("&nbsp", "")
             current_data = current_data.replace('\u00A0', '')
@@ -794,7 +815,7 @@ class Experimenter:
                 paper_name = row["paper_name"]
                 paper_session = row["paper_session"]
                 paper_year = row["paper_proceeding"]
-                paper = Paper(paper_name, paper_year, "")
+                paper = Paper(paper_name, paper_year, paper_session, "")
 
                 print(paper_name)
 
@@ -1086,6 +1107,74 @@ class Experimenter:
     def contains_keyword(self, sentence, keywords):
         return any(keyword.lower() in sentence.lower() for keyword in keywords)
 
+    def extract_keywords_per_paper(self, column_name: str, all_ngrams_until=True, minimum_length=1, top_k=5, avg=True,
+                                    sd=True, file_name="paper_metrics.csv", save=True, append=True):
+
+        all_sentence_counts = Counter()
+
+        for paper_name, paper in self.papers.items():
+            paper_sections = paper.get_paper_sections_no_delimiter()
+            seen_sentence = set()
+
+            for section in paper_sections:
+
+                # Preprocess the text (remove non-alphanumeric characters, convert to lowercase)
+                text = re.sub(r'[^a-zA-Z.,;?!:\s\n\[\]\d-]', '', section)
+
+                # Remove everything inside square brackets
+                text = re.sub(r'\[.*?\]', '', text)
+
+                text = re.sub(r'\[\s*\d+\s*(?:,\s*\d+\s*)*\]', '', text)
+
+                # Remove punctuation even if there is a space in between, excluding "-"
+                text = re.sub(r'([.,;])\s*(?<!\n)', r'\1', text)
+
+                # Replace consecutive spaces with a single space, excluding "\n"
+                # text = re.sub(r'(?<!\n)\s+', ' ', text)
+                # text = re.sub(r'(?<!\n)\s+(?!\n)', ' ', text)
+
+                # Remove spaces before punctuation, excluding "-"
+                # text = re.sub(r'\s*([.,;?!:])\s*', r'\1', text)
+                # text = re.sub(r'\s*([.,;?!:])', r'\1', text)
+                text = re.sub(r'\s*([.,;?!:])(?<!\n)', r'\1', text)
+
+                text = text.lower()
+
+                # Extract sentences based on ".", ",", ";", and "\n"
+                # sentences = re.split(r'[.,;\n]', text)
+
+                # Extract sentences based on ".", ",", ";", ":", "!", "?", and "\n"
+                sentences = re.split(r'[.,;?!:\n]', text)
+
+                # Remove leading and trailing whitespaces from each sentence
+                sentences = [sentence.strip() for sentence in sentences]
+
+                # Filter out sentences that are either one word or empty space
+                sentences = [sentence for sentence in sentences if len(sentence.split()) > minimum_length]
+
+                # Filter out based on keywords
+                sentences = [sentence for sentence in sentences if
+                             not self.contains_keyword(sentence, self.ignore_keywords_analysis)]
+
+                # Count each unique sentence
+                sentence_counts = Counter(sentences)
+
+                for sentence_count in sentence_counts:
+                    # Count only if the n-gram hasn't been seen in this text before
+                    if sentence_count not in seen_sentence:
+                        all_sentence_counts[sentence_count] += 1
+                        # all_ngram_counts[ngram] += 1
+                        seen_sentence.add(sentence_count)
+
+        # Display the top 5 n-grams by counts sorted!
+        print(f"Here we present all sentences ocurrances in papers with minimum_length {minimum_length}")
+        total_sentences = len(self.papers)
+        for sentence, count in sorted(all_sentence_counts.items(), key=lambda x: x[1], reverse=True)[:top_k]:
+            percentage = (count / total_sentences) * 100
+            print(f"{sentence}: {count} occurrences ({percentage:.2f}% of total)")
+
+        print("\n")
+
     def extract_sentences_per_paper(self, column_name: str, all_ngrams_until=True, minimum_length=1, top_k=5, avg=True, sd=True, file_name="paper_metrics.csv", save=True, append=True):
 
         all_sentence_counts = Counter()
@@ -1152,6 +1241,256 @@ class Experimenter:
             print(f"{sentence}: {count} occurrences ({percentage:.2f}% of total)")
 
         print("\n")
+
+    def save_encountered_papers_keywords(self, searched_keyword):
+
+        # Get the paper with the most sections!
+        self.encountered_papers_general = EncounteredPapersGeneral("aiide-dataset", 50)
+
+        for paper_name, paper_object in self.encountered_papers.items():
+            print(paper_name)
+
+            self.encountered_papers_general.add_sections(paper_object.get_paper_sections_raw())
+
+            self.encountered_papers_general.add_full_datapoint(
+                paper_object.get_paper_name(),
+                paper_object.paper_number,
+                paper_object.paper_counter,
+                paper_object.get_paper_session(),
+                paper_object.get_paper_proceedings(),
+                paper_object.keyword
+            )
+
+        df = pd.DataFrame(self.encountered_papers_general.get_data(),
+                          columns=self.encountered_papers_general.get_data().keys())
+        df_cleaned = df.applymap(self.remove_illegal_characters)
+        # df.to_excel("output.xlsx")
+        # df_cleaned.to_excel(self.papers_directory + "/../aiide-dataset-peryeartest-third-nocontains.xlsx")
+        df_cleaned.to_excel(self.papers_directory + "/../results_keywords/" + searched_keyword + ".xlsx")
+
+    def extract_statistics(self, searched_keyword, dataset, print_total):
+
+        # [total number, total non repetitive number, total main conference, total workshops]
+        numbers_per_year = {}
+
+        for i in range(2005, 2024):
+            numbers_per_year.update({i: []})
+            numbers_per_year[i].append(0)
+            numbers_per_year[i].append(0)
+            numbers_per_year[i].append(0)
+            numbers_per_year[i].append(0)
+
+        for paper_name, paper_object in dataset.items():
+
+            paper_year = paper_object.get_paper_proceedings()
+
+            if paper_year in numbers_per_year:
+                # Then do something
+                numbers_per_year[paper_year][0] += 1
+
+                if paper_object.paper_counter == 1:
+                    numbers_per_year[paper_year][1] += 1
+
+                if paper_object.get_paper_session().startswith("ws"):
+                    numbers_per_year[paper_year][3] += 1
+                else:
+                    numbers_per_year[paper_year][2] += 1
+
+            else:
+                numbers_per_year.update({paper_year : []})
+                numbers_per_year[paper_year].append(0)
+                numbers_per_year[paper_year].append(0)
+                numbers_per_year[paper_year].append(0)
+                numbers_per_year[paper_year].append(0)
+
+                numbers_per_year[paper_year][0] += 1
+
+                if paper_object.paper_counter == 1:
+                    numbers_per_year[paper_year][1] += 1
+
+                if paper_object.get_paper_session().startswith("ws"):
+                    numbers_per_year[paper_year][3] += 1
+                else:
+                    numbers_per_year[paper_year][2] += 1
+
+        print("-----------------------")
+
+        print("NOW THE DATA PER YEAR!! " + searched_keyword)
+
+        numbers_per_year = dict(sorted(numbers_per_year.items()))
+
+        for year, data in numbers_per_year.items():
+            # print(str(year) + ": " + str(data[0]) + ", " + str(data[1]) + ", " + str(data[2]) + ", " + str(data[3]))
+            if print_total:
+                print(data[0])
+            else:
+                print(data[1])
+
+        print("-----------------------")
+
+    def save_aggregated_encountered_papers(self):
+
+        # Get the paper with the most sections!
+        self.encountered_papers_general = EncounteredPapersGeneral("aiide-dataset", 50)
+
+        for paper_name, paper_object in self.aggregated_encountered_papers.items():
+            print(paper_name)
+
+            self.encountered_papers_general.add_sections(paper_object.get_paper_sections_raw())
+
+            self.encountered_papers_general.add_full_datapoint(
+                paper_object.get_paper_name(),
+                paper_object.paper_number,
+                paper_object.paper_counter,
+                paper_object.get_paper_session(),
+                paper_object.get_paper_proceedings(),
+                paper_object.keyword
+            )
+
+        df = pd.DataFrame(self.encountered_papers_general.get_data(),
+                          columns=self.encountered_papers_general.get_data().keys())
+        df_cleaned = df.applymap(self.remove_illegal_characters)
+        # df.to_excel("output.xlsx")
+        # df_cleaned.to_excel(self.papers_directory + "/../aiide-dataset-peryeartest-third-nocontains.xlsx")
+        df_cleaned.to_excel(self.papers_directory + "/../results_keywords/aggregated_counters.xlsx")
+
+    def search_references_per_paper(self, key_reference, sentences_to_search: [], all_ngrams_until=True, minimum_length=1,
+                                  top_k=5, avg=True,
+                                  sd=True, file_name="paper_metrics.csv", save=True, append=True):
+
+        # all_sentence_counts = Counter()
+        paper_counter = -1
+        self.encountered_papers = {}
+        self.encountered_papers_general = {}
+
+        for paper_name, paper in self.papers.items():
+            paper_sections = paper.get_paper_sections_no_delimiter()
+            finished_searching_paper = False
+            paper_counter += 1
+            paper_already_counted = False
+
+            for section in paper_sections:
+
+                if finished_searching_paper:
+                    break
+
+                text = " ".join(section.split())
+                text = text.lower()
+
+                # Extract sentences based on ".", ",", ";", ":", "!", "?", and "\n"
+                sentences = re.split(r'[.?!:\n]', text)
+
+                # Remove leading and trailing whitespaces from each sentence
+                sentences = [sentence.strip() for sentence in sentences]
+
+                # Filter out based on keywords
+                sentences = [sentence for sentence in sentences if
+                             not self.contains_keyword(sentence, self.ignore_keywords_analysis)]
+
+                for sentence_to_search in sentences_to_search:
+
+                    # Filter out sentences that do not contain the specified substring
+                    sentences_searched = [sentence for sentence in sentences if
+                                          sentence_to_search.lower() in sentence.lower()]
+
+                    # Filter out sentences that are either one word or empty space
+                    sentences_searched = [sentence for sentence in sentences_searched if
+                                          len(sentence.split()) > minimum_length]
+
+                    if sentences_searched:
+
+                        current_paper = None
+
+                        if not paper_name in self.encountered_papers:
+                            self.encountered_papers.update(
+                                {paper_name: EncounteredPapers(paper_name, paper.paper_year, paper.paper_session,
+                                                               keyword, paper_counter)})
+
+                        current_paper = self.encountered_papers[paper_name]
+
+                        for found_sentence in sentences_searched:
+                            current_paper.add_sentence(found_sentence)
+
+                        if not paper_already_counted:
+                            if not paper_name in self.aggregated_encountered_papers:
+                                self.aggregated_encountered_papers.update(
+                                    {paper_name: EncounteredPapers(paper_name, paper.paper_year, paper.paper_session,
+                                                                   keyword, paper_counter)})
+                            else:
+                                self.aggregated_encountered_papers[paper_name].add_counter()
+
+                            paper_already_counted = True
+
+        self.save_encountered_papers_keywords(keyword)
+        self.extract_statistics(keyword, self.encountered_papers, True)
+
+    def search_keywords_per_paper(self, keyword, sentences_to_search: [], all_ngrams_until=True, minimum_length=1, top_k=5, avg=True,
+                                    sd=True, file_name="paper_metrics.csv", save=True, append=True):
+
+        # all_sentence_counts = Counter()
+        paper_counter = -1
+        self.encountered_papers = {}
+        self.encountered_papers_general = {}
+
+        for paper_name, paper in self.papers.items():
+            paper_sections = paper.get_paper_sections_no_delimiter()
+            finished_searching_paper = False
+            paper_counter += 1
+            paper_already_counted = False
+
+            for section in paper_sections:
+
+                if finished_searching_paper:
+                    break
+
+                text = " ".join(section.split())
+                text = text.lower()
+
+                # Extract sentences based on ".", ",", ";", ":", "!", "?", and "\n"
+                sentences = re.split(r'[.?!:\n]', text)
+
+                # Remove leading and trailing whitespaces from each sentence
+                sentences = [sentence.strip() for sentence in sentences]
+
+                # Filter out based on keywords
+                sentences = [sentence for sentence in sentences if not self.contains_keyword(sentence, self.ignore_keywords_analysis)]
+
+                for sentence_to_search in sentences_to_search:
+
+                    # Filter out sentences that do not contain the specified substring
+                    sentences_searched = [sentence for sentence in sentences if sentence_to_search.lower() in sentence.lower()]
+
+                    # Filter out sentences that are either one word or empty space
+                    sentences_searched = [sentence for sentence in sentences_searched if len(sentence.split()) > minimum_length]
+
+                    if sentences_searched:
+
+                        current_paper = None
+
+                        if not paper_name in self.encountered_papers:
+                            self.encountered_papers.update(
+                                {paper_name: EncounteredPapers(paper_name, paper.paper_year, paper.paper_session,
+                                                               keyword, paper_counter)})
+
+                        current_paper = self.encountered_papers[paper_name]
+
+                        for found_sentence in sentences_searched:
+                            current_paper.add_sentence(found_sentence)
+
+                        if not paper_already_counted:
+                            if not paper_name in self.aggregated_encountered_papers:
+                                self.aggregated_encountered_papers.update(
+                                    {paper_name: EncounteredPapers(paper_name, paper.paper_year, paper.paper_session,
+                                                                   keyword, paper_counter)})
+                            else:
+                                self.aggregated_encountered_papers[paper_name].add_counter()
+
+                            paper_already_counted = True
+
+
+        self.save_encountered_papers_keywords(keyword)
+        self.extract_statistics(keyword, self.encountered_papers, True)
+
 
     def search_sentences_per_paper(self, sentences_to_search: [], all_ngrams_until=True, minimum_length=1, top_k=5, avg=True,
                                     sd=True, file_name="paper_metrics.csv", save=True, append=True):

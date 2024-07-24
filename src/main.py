@@ -18,34 +18,49 @@ if __name__ == '__main__':
     print_hi('PyCharm')
 
 core_path = Path(__file__).parent.resolve() / "../../per-year-test/"
-#core_path = Path(__file__).parent.resolve() / "../../test-around/"
-core_path = Path(__file__).parent.resolve() / "../../specific-test/"
+core_path = Path(__file__).parent.resolve() / "../../test-around/"
+#core_path = Path(__file__).parent.resolve() / "../../specific-test/"
 core_path = Path(__file__).parent.resolve() / "../../per-year/"
+core_path = Path(__file__).parent.resolve() / "../../FINAL-TEST/"
 print(core_path)
 
 final_paper_directory = str(core_path)
 testPlot = Experimenter(str(final_paper_directory), "AIIDE papers")
-testPlot.load_all_papers_pdf(str(final_paper_directory))
-#testPlot.load_compressed_view() # After we have actually loaded all the raw data from html, it is easy and quick to load comprresed
-#testPlot.calculate_metrics_references(column_name="references")
+#testPlot.load_all_papers_pdf(str(final_paper_directory))
+testPlot.load_compressed_view() # After we have actually loaded all the raw data from html, it is easy and quick to load comprresed
+testPlot.calculate_metrics_references(column_name="references")
 
-# Extract most used sentences in all papers and all sections (you can set the minimum length)
+#testPlot.search_keywords_per_paper(keyword="pcg", sentences_to_search=["PCG", "procedural content generation", "procedurally generated content", "content generation", "procedural generation", "procedurally generating"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="mixed-initiative", sentences_to_search=["mixed-initiative", "mixedinitiative", "mixed initiative"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="CAD", sentences_to_search=["computer-aided game design", "computer-aided design", "computer aided design", "computer aided game design", "computer-aided", "computer aided", "computer aid", "computer-aid"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="computer-aided", sentences_to_search=["computer-aided", "computer aided", "computer aid", "computer-aid"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="human-ai", sentences_to_search=["human-ai", "humanai"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="human-ai-collaboration-inter", sentences_to_search=["human-ai collaboration", "humanai collaboration", "humanai interaction", "human-ai interaction"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="computational-support", sentences_to_search=["computational support", "computationally support", "computationally supported"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="design-assistant", sentences_to_search=["design assistant", "designer assistant", "design-assistant", "intelligent design assistant", "intelligent designer assistant"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="ai-assisted", sentences_to_search=["ai assisted", "ai-assisted", "ai assistant", "ai-assistant"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="co-design", sentences_to_search=["co-design", "codesign", "co-designing", "codesigning", "codesigner", "co-designer"], minimum_length=1, top_k=10)
+testPlot.search_keywords_per_paper(keyword="co-creative", sentences_to_search=["co-creative", "co-creativity", "cocreative", "cocreativity"], minimum_length=1, top_k=10)
+
+testPlot.save_aggregated_encountered_papers()
+testPlot.extract_statistics("keyword", testPlot.aggregated_encountered_papers, False)
+# # Extract most used sentences in all papers and all sections (you can set the minimum length)
 # testPlot.extract_sentences(column_name="nothing")
 # testPlot.extract_sentences(column_name="nothing", minimum_length=3)
 # testPlot.extract_sentences(column_name="nothing", minimum_length=6)
-
+#
 # testPlot.extract_sentences_per_paper(column_name="not important")
 # testPlot.extract_sentences_per_paper(column_name="not important", minimum_length=3)
 # testPlot.extract_sentences_per_paper(column_name="not important", minimum_length=6)
-#
+# #
 # testPlot.search_sentences_per_paper(sentences_to_search=["contribution", "three research questions",
 # "research question", "our knowledge"], minimum_length=3, top_k=10)
 # testPlot.search_sentences_per_paper(sentences_to_search=["contribution", "three research questions",
 # "research question", "our knowledge"], minimum_length=6, top_k=10)
 # testPlot.search_sentences_per_paper(sentences_to_search=["contribution", "three research questions",
 # "research question", "our knowledge"], minimum_length=9, top_k=10)
-#
-# # testPlot.calculate_ngram_unique(column_name="no_matter", ngram=10, all_ngrams_until=True, top_k=5)
+# #
+# # # testPlot.calculate_ngram_unique(column_name="no_matter", ngram=10, all_ngrams_until=True, top_k=5)
 # testPlot.calculate_ngram(column_name="intro", ngram=10, top_k=25)
 # testPlot.calculate_ngram_per_paper(column_name="no_matter", ngram=10, all_ngrams_until=True, top_k=25)
 
