@@ -7,6 +7,24 @@ from datetime import date
 from pathlib import Path
 
 from Experimenter import Experimenter, DatasetInputType
+from ExperimenterFDG import ExperimenterFDG
+
+core_path = Path(__file__).parent.resolve() / "../../per-year-test/"
+core_path = Path(__file__).parent.resolve() / "../../test-around/"
+#core_path = Path(__file__).parent.resolve() / "../../specific-test/"
+core_path = Path(__file__).parent.resolve() / "../../per-year/"
+core_path = Path(__file__).parent.resolve() / "../../FDG/test-around/"
+# core_path = Path(__file__).parent.resolve() / "../../FDG/reference-test/"
+core_path = Path(__file__).parent.resolve() / "../../FDG/reference-issues/"
+core_path = Path(__file__).parent.resolve() / "../../FDG/text-extract-issues-2/"
+# core_path = Path(__file__).parent.resolve() / "../../FDG/FDG-papers/"
+print(core_path)
+
+final_paper_directory = str(core_path)
+testPlot = ExperimenterFDG(str(final_paper_directory), "FDG papers")
+testPlot.load_all_papers_pdf(str(final_paper_directory))
+#testPlot.load_compressed_view() # After we have actually loaded all the raw data from html, it is easy and quick to load comprresed
+testPlot.calculate_metrics_references(column_name="references")
 
 def print_hi(name):
     # Use a breakpoint in the code line below to debug your script.

@@ -14,6 +14,8 @@ class CollectedPapersGeneral:
         self.papers_data.update({'paper_authors_institution': []})
         self.papers_data.update({'abstract': []})
         self.papers_data.update({'section_titles': []})
+        self.papers_data.update({'acm_keywords': []})
+        self.papers_data.update({'keywords': []})
 
         for i in range(0, max_number_sections):
             self.papers_data.update({"section" + str(i): []})
@@ -43,10 +45,12 @@ class CollectedPapersGeneral:
         self.papers_data['paper_authors_institution'].append([])
         self.papers_data['section_titles'].append([])
         self.papers_data['references'].append([])
+        self.papers_data['acm_keywords'].append([])
+        self.papers_data['keywords'].append([])
 
         self.current_index = self.current_index + 1
 
-    def add_full_datapoint(self, paper_name, session_name, proceedings_year, abstract, authors, full_authors, section_titles, references): #, sections, references):
+    def add_full_datapoint(self, paper_name, session_name, proceedings_year, abstract, authors, full_authors, section_titles, references, acm_keywords, keywords): #, sections, references):
         self.papers_data['paper_name'].append(paper_name)
         self.papers_data['paper_session'].append(session_name)
         self.papers_data['paper_proceeding'].append(proceedings_year)
@@ -55,6 +59,8 @@ class CollectedPapersGeneral:
         self.papers_data['paper_authors_institution'].append(full_authors)
         self.papers_data['section_titles'].append(section_titles)
         self.papers_data['references'].append(references)
+        self.papers_data['acm_keywords'].append(acm_keywords)
+        self.papers_data['keywords'].append(keywords)
 
     def update_datapoint(self, data_column, data):
         self.papers_data[data_column][self.current_index].append(data)

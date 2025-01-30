@@ -14,6 +14,8 @@ class Paper:
         self.section_titles = []
         self.sections = []
         self.references = []
+        self.acm_keywords = []
+        self.keywords = []
 
         self.delimiter = " ___ "
         self.current_reference = 0
@@ -32,6 +34,10 @@ class Paper:
             self.sections.append(value)
         elif variable == "reference":
             self.references.append(value)
+        elif variable == "acm_keywords":
+            self.acm_keywords.append(value)
+        elif variable == "keywords":
+            self.keywords.append(value)
 
     def add_value_compressed(self, value, variable):
 
@@ -112,6 +118,18 @@ class Paper:
 
     def get_paper_section_titles_no_delimiter(self):
         return self.section_titles
+
+    def get_paper_acm_keywords(self):
+        return self.delimiter.join(self.acm_keywords)
+
+    def get_paper_acm_keywords_no_delimiter(self):
+        return self.acm_keywords
+
+    def get_paper_keywords(self):
+        return self.delimiter.join(self.keywords)
+
+    def get_paper_keywords_no_delimiter(self):
+        return self.keywords
 
     def get_paper_sections(self):
         return self.delimiter.join(self.sections)
